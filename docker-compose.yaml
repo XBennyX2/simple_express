@@ -1,0 +1,52 @@
+version: "3"
+
+services:
+  traefik:
+    image: traefik:v2.10
+    container_name: traefik
+    command:
+      - "--api.insecure=true" # Enable the Traefik dashboard (for testing only)
+      - "--providers.docker=true" # Enable Traefik to read Docker labels
+      - "--entrypoints.web.address=:80" # Expose HTTP on port 80
+    ports:
+      - "80:80"   # HTTP
+      - "8080:8080" # Traefik dashboard (optional)
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock" # Docker socket for labels
+    networks:
+      - web
+
+  app:
+    build: .
+    container_name: simple_express
+    environment:
+      - PORT=3000
+    labels:
+      - "traefik.enable=true"
+      # Routing for the application
+      - "traefik.http.routers.simple_express.rule=Host(`vbox`)"
+      - "traefik.http.services.simple_express.loadbalancer.server.port=3000"
+    networks:
+      - web
+
+  app2:
+    build: ./service2
+    container_name: service_two
+    environment:
+      - PORT=4000
+    labels:
+      - "traefik.enable=true"
+      # Subdomain-based rule
+      - "traefik.http.routers.servicetwo.rule=Host(`servicetwo.vbox`)"
+      - "traefik.http.services.servicetwo.loadbalancer.server.port=4000"
+      # Path-based rule
+      - "traefik.http.routers.servicetwo_path.rule=PathPrefix(`/servicetwo`)"
+      - "traefik.http.middlewares.servicetwo_strip.stripprefix.prefixes=/servicetwo"
+      - "traefik.http.routers.servicetwo_path.middlewares=servicetwo_strip"
+    networks:
+      - web
+
+networks:
+  web:
+    driver: bridge
+
